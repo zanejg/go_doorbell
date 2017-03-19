@@ -22,3 +22,8 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+# definitely don't want the sounds in the repo
+*.mp3
+*.wav
+*.ogg
