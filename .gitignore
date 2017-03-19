@@ -24,6 +24,10 @@ _testmain.go
 *.prof
 
 # definitely don't want the sounds in the repo
+# or any other crap
 *.mp3
 *.wav
 *.ogg
+*.jpg
+*.JPG
+*.jpeg
