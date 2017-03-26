@@ -247,7 +247,7 @@ func SubscribeNewDoorbell(w http.ResponseWriter, req *http.Request, ps httproute
 
     defer f.Close()
 
-    if _, err = f.WriteString(ip_chunks[0]); err != nil {
+    if _, err = f.WriteString(fmt.Sprintf("%s\n",ip_chunks[0]); err != nil {
         panic(err)
     }
     fmt.Fprintf(w,"Join Success")
@@ -269,8 +269,8 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
     lsdir:=Ls(MP3path)
     //fmt.Printf("the files:%s", lsdir)
 
-    the_url := fmt.Sprintf("http://%s:3400/putchime",the_server)
-    the_url = "http://localhost:3400/putchime"
+    the_url := fmt.Sprintf("http://%s:%s/putchime",the_server,CONFIG.Satellite_port)
+    the_url = fmt.Sprintf("http://localhost:%s/putchime",CONFIG.Satellite_port)
     the_path := ""
     fmt.Printf("the_url:%s\n", the_url)
 
@@ -283,6 +283,15 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
 
 
 }
+
+func all_doorbells_ring(filename string){
+    /*
+    Send the command to all doorbells to ring the sent chime
+    */
+
+
+}
+
 
 
 //*************************************************************************************
