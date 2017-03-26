@@ -10,17 +10,20 @@ import (
     "html/template"
     "os"
     "io"
+    "io/ioutil"
     "time"
     "crypto/md5"
     "strconv"
     "strings"
     "mime/multipart"
+    "encoding/json"
 )
 
 const (
-    MP3path = "/home/zane/programming/go/webserver/thesounds/"
+    MP3subpath = "thesounds/"
     //MP3path = "/home/zane/programming/go/webserver/emptysounds/"
 
+    Ring_url = "ringchime/"
     Doorbell_url = "http://localhost:3400/ringchime/"
     Doorbells_file = "./doorbells.txt"
 
@@ -285,7 +288,37 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
 //*************************************************************************************
 //*************************************************************************************
 
+type Config struct {
+    Doorbell_dir string
+    Satellite_port  int
+}
+var CONFIG Config
+
+var MP3path string
+
+
+func GetConfig() (Config){
+    var ret Config
+    raw, err := ioutil.ReadFile("./config.json")
+    if err != nil {
+        fmt.Println(err.Error())
+        os.Exit(1)
+    }
+    json.Unmarshal(raw, &ret)
+    return ret
+}
+
+
+
 func main() {
+    CONFIG = GetConfig()
+    fmt.Println("DIR:",CONFIG.Doorbell_dir)
+    fmt.Println("Port:",CONFIG.Satellite_port)
+
+    MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
+
+
+
     router := httprouter.New()
     router.GET("/", Index)
     router.GET("/hello/:name", Hello)
