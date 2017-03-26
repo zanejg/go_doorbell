@@ -247,7 +247,7 @@ func SubscribeNewDoorbell(w http.ResponseWriter, req *http.Request, ps httproute
 
     defer f.Close()
 
-    if _, err = f.WriteString(fmt.Sprintf("%s\n",ip_chunks[0]); err != nil {
+    if _, err = f.WriteString(fmt.Sprintf("%s\n",ip_chunks[0])); err != nil {
         panic(err)
     }
     fmt.Fprintf(w,"Join Success")
