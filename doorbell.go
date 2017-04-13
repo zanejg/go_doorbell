@@ -14,12 +14,15 @@ import (
     "crypto/md5"
     "strconv"
     "strings"
+    "io/ioutil"
+    "encoding/json"
     //"bufio"
 )
 
 const (
     //MP3path = "/home/zane/programming/go/webserver/thesounds/"
-    MP3path = "/home/zane/programming/go/webserver/clientsounds/"
+    //MP3path = "/home/zane/programming/go/webserver/clientsounds/"
+    MP3subpath = "thesounds/"
 
 )
 
@@ -146,9 +149,36 @@ func PutChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 // func PutChime(rw http.ResponseWriter, r *http.Request, p httprouter.Params) {
 //     fmt.Fprintln(rw, "post update")
 // }
+type Config struct {
+    Doorbell_dir string
+    Satellite_port  int
+}
+var CONFIG Config
+var MP3path string
+func GetConfig() (Config){
+    /*
+    Read the config file and set the global vars
+    */
+    var ret Config
+    raw, err := ioutil.ReadFile("./config.json")
+    if err != nil {
+        fmt.Println(err.Error())
+        os.Exit(1)
+    }
+    json.Unmarshal(raw, &ret)
+    return ret
+}
+
+
 
 
 func main() {
+
+    CONFIG = GetConfig()
+    fmt.Println("DIR:",CONFIG.Doorbell_dir)
+    fmt.Println("Port:",CONFIG.Satellite_port)
+
+    MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
 
     // no cmd parms so we just run normally
     router := httprouter.New()
@@ -160,6 +190,6 @@ func main() {
     router.GET("/ringchime/:name", RingChime)
     //router.PUT("/putchime", PutChime)
 
-    log.Fatal(http.ListenAndServe(":3400", router))
+    log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d",CONFIG.Satellite_port), router))
 
 }
