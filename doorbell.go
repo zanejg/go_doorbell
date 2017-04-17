@@ -129,14 +129,14 @@ func PutChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
            r.ParseMultipartForm(32 << 20)
            file, handler, err := r.FormFile("uploadfile")
            if err != nil {
-               fmt.Println(err)
+               fmt.Println(fmt.Sprintf("FormFile error:%s",err))
                return
            }
            defer file.Close()
            fmt.Fprintf(w, "%v", handler.Header)
            f, err := os.OpenFile(MP3path+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
            if err != nil {
-               fmt.Println(err)
+               fmt.Println(fmt.Sprintf("Error opening file:%s",err))
                return
            }
            defer f.Close()

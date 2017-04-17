@@ -3,6 +3,7 @@ package main
 import (
     "fmt"
     "github.com/julienschmidt/httprouter"
+    "math/rand"
     "net/http"
     "log"
     //"os/exec"
@@ -17,6 +18,8 @@ import (
     "strings"
     "mime/multipart"
     "encoding/json"
+    "bufio"
+    "github.com/stianeikeland/go-rpio"
 )
 
 const (
@@ -49,7 +52,7 @@ type ListPageData struct {
 //*************************************************************************************
 
 
-func Ls(dirpath string) []string {
+func ListStoredChimes(dirpath string) []string {
     dir, err:= os.Open(dirpath)
     if err != nil{
         fmt.Printf("opening error:%v\n",err)
@@ -78,6 +81,7 @@ func Ls(dirpath string) []string {
 func SendChime(file , url string)(err error){
     // Function to send the file identified by file in the MP3path dir to the
     // doorbell webserver identified by url
+
     // Prepare a form that you will submit to that URL.
     var b bytes.Buffer
     w := multipart.NewWriter(&b)
@@ -135,9 +139,21 @@ func SendChime(file , url string)(err error){
 }
 
 
+func SendChimeToAll(file string)(err error){
+    /*
+    Function to send the passed chime to all satellite doorbells
+    Will return the last error or nil.
+    */
+    var this_err error
+    for _,this_doorbell := range(SubscribedDoorbells){
+        this_err = SendChime(file, fmt.Sprintf("http://%s:%d/putchime",this_doorbell,CONFIG.Satellite_port))
+        if this_err != nil {
+            err = this_err
+        }
+    }
 
-
-
+    return err
+}
 
 
 //*************************************************************************************
@@ -157,14 +173,19 @@ func Hello(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 
 
 func GetChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    /*
+    So user can send a chime to the doorbell server
+    via POST
+    */
        fmt.Println("method:", r.Method)
        pagedata := PageData{Token:"Big Secret Token",
                             Serverstr:"192.168.178.20",
                             Reply:""}
 
         reply:=""
+        filepath := ""
 
-        lsdir:=Ls(MP3path)
+        lsdir:=ListStoredChimes(MP3path)
         if len(lsdir) < 1{
             fmt.Printf("no files in dir")
         }
@@ -177,20 +198,29 @@ func GetChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
                fmt.Println(err)
                return
            }
-           defer file.Close()
+           //defer file.Close()
            //fmt.Fprintf(w, "%v", handler.Header)
-           f, err := os.OpenFile(MP3path+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+           filepath = MP3path+handler.Filename
+           f, err := os.OpenFile(filepath, os.O_WRONLY|os.O_CREATE, 0666)
            if err != nil {
                fmt.Println(err)
                return
            }
-           defer f.Close()
+
            // only want the file if it is an MP3
            if strings.HasSuffix(handler.Filename, ".mp3") {
                io.Copy(f, file)
-               reply = fmt.Sprintf("Got file called:%s",handler.Filename)
+               reply = fmt.Sprintf("Got file called:%s\n",handler.Filename)
+               fmt.Printf("%s",reply)
+               f.Close()
+               file.Close()
+               // now send it out to all satellite doorbells
+               err := SendChimeToAll(filepath)
+               if err != nil{
+                   fmt.Printf("At least one error sending the chime to all:%s\n",err)
+               }
            }else{
-               reply = fmt.Sprintf("File called:%s does not appear to be an MP3",handler.Filename)
+               reply = fmt.Sprintf("File called:%s does not appear to be an MP3\n",handler.Filename)
            }
 
        }
@@ -207,12 +237,13 @@ func GetChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
        t.Execute(w, pagedata)
 }
 
-
-
 func ListChimes(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+    /*
+    List all of the chimes on the server.
+    */
        fmt.Println("method:", r.Method)
 
-       lsdir:=Ls(MP3path)
+       lsdir:=ListStoredChimes(MP3path)
        if len(lsdir) < 1 {
            emptyls := []string{"NO FILES"}
            lsdir = emptyls
@@ -237,6 +268,10 @@ func TestSend(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func SubscribeNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+    /*
+    Write the IP of the new doorbell to the dorbells.txt file
+    And send back a success message.
+    */
     ip_chunks := strings.Split(req.RemoteAddr,":")
     fmt.Println("IP:",ip_chunks[0])
 
@@ -247,14 +282,21 @@ func SubscribeNewDoorbell(w http.ResponseWriter, req *http.Request, ps httproute
 
     defer f.Close()
 
-    if _, err = f.WriteString(fmt.Sprintf("%s\n",ip_chunks[0])); err != nil {
+    new_ip := fmt.Sprintf("%s\n",ip_chunks[0])
+
+    if _, err = f.WriteString(new_ip); err != nil {
         panic(err)
     }
+
+    SubscribedDoorbells = append(SubscribedDoorbells,new_ip)
     fmt.Fprintf(w,"Join Success")
 
 }
 
 func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Params) {
+    /*
+    Send all of the current chimes to the passed doorbell
+    */
     ip_chunks := strings.Split(req.RemoteAddr,":")
     the_server := ip_chunks[0]
     fmt.Println("sync IP:",ip_chunks[0])
@@ -266,7 +308,7 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
     //time.Sleep(1000 * time.Millisecond)
 
     // now we need to ensure that the doorbell has all the files it needs
-    lsdir:=Ls(MP3path)
+    lsdir:=ListStoredChimes(MP3path)
     //fmt.Printf("the files:%s", lsdir)
 
     the_url := fmt.Sprintf("http://%s:%s/putchime",the_server,CONFIG.Satellite_port)
@@ -280,33 +322,81 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
 
         SendChime( the_path, the_url)
     }
-
-
 }
 
-func all_doorbells_ring(filename string){
+func WebRingAllDoorbells(w http.ResponseWriter, r *http.Request, _ httprouter.Params){
     /*
-    Send the command to all doorbells to ring the sent chime
+    To tell all of the subscribed doorbells to ring after
+    choosing which chime randomly from the dir
     */
 
+    reply := RingAllDoorbells()
 
+
+    pagedata := PageData{Token:"Big Secret Token",
+                        Reply:reply}
+
+
+    t, _ := template.ParseFiles("index_central.gtpl")
+    t.Execute(w,pagedata)
 }
+
 
 
 
 //*************************************************************************************
 //*************************************************************************************
 
-type Config struct {
-    Doorbell_dir string
-    Satellite_port  int
-}
-var CONFIG Config
 
-var MP3path string
+func RingAllDoorbells () string {
+    // send the ring command to all doorbells in the subscribed doorbell list
+    reply:= ""
+    lsdir:=ListStoredChimes(MP3path)
+    //fmt.Printf("%s\n",lsdir)
+    if len(lsdir) < 1 {
+       reply = "No files to choose from"
+    }else{
+        rand.Seed(time.Now().UnixNano())
+        chosen := lsdir[rand.Intn(len(lsdir))]
+        reply = fmt.Sprintf("Chose: %s", chosen)
+        fmt.Printf("%s\n",reply)
+
+
+        for _,this_doorbell := range(SubscribedDoorbells){
+            go RingADoorbell(chosen,this_doorbell)
+        }
+    }
+    return reply
+}
+
+
+
+func RingADoorbell(filename string, url string){
+    /*
+    Send a ring command to a satellite doorbell
+    */
+    client := &http.Client{}
+    this_url := fmt.Sprintf("http://%s:%d/%s%s",
+                                        url, CONFIG.Satellite_port, Ring_url,filename)
+    fmt.Printf("this_url: %s\n",this_url)
+    req, _ := http.NewRequest("GET", this_url, nil)
+    //req.Header.Add("Accept", "application/json")
+    resp, err := client.Do(req)
+    if err != nil {
+            //log.Print(err)
+            fmt.Printf(fmt.Sprintf("@@@ ERROR:%s for doorbell:%s with response:%s",err,url,resp))
+    }else{
+        fmt.Printf(fmt.Sprintf("Rang doorbell:%s\n",url))
+    }
+
+}
+
 
 
 func GetConfig() (Config){
+    /*
+    Read the config file and set the global vars
+    */
     var ret Config
     raw, err := ioutil.ReadFile("./config.json")
     if err != nil {
@@ -317,6 +407,62 @@ func GetConfig() (Config){
     return ret
 }
 
+func getSubscribedDoorbells() []string {
+    /*
+    Get the list of all of the IPs of the subscribed doorbells.
+    Reads them from the doorbells.txt file
+    */
+    f, err := os.Open(Doorbells_file)
+    if err != nil {
+          panic(err)
+    }
+    defer f.Close()
+
+    var ret []string
+    scanner := bufio.NewScanner(f)
+    for scanner.Scan() {
+          ret = append(ret, scanner.Text())
+    }
+    if err := scanner.Err(); err != nil {
+          fmt.Fprintln(os.Stderr, err)
+    }
+
+    return ret
+}
+
+
+/**************************************************************************
+     MAIN BUTTON EVENT LOOP
+***************************************************************************/
+func WaitForDoorbellButton(){
+    doorbell_reply := ""
+    // infinite loop for waiting for button presses
+    for {
+        // sit here waiting for the pin to go high
+        for gpio_pin.Read() == 0 { }
+        // when the the pin goes high then ring the bells
+        doorbell_reply = RingAllDoorbells()
+        fmt.Printf("Replies: %s",doorbell_reply)
+    }
+
+}
+/**************************************************************************
+***************************************************************************/
+
+
+var gpio_pin rpio.Pin
+
+type Config struct {
+    Doorbell_dir string
+    Satellite_port  int
+}
+var CONFIG Config
+var MP3path string
+var SubscribedDoorbells []string
+
+
+
+
 
 
 func main() {
@@ -324,8 +470,18 @@ func main() {
     fmt.Println("DIR:",CONFIG.Doorbell_dir)
     fmt.Println("Port:",CONFIG.Satellite_port)
 
-    MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
+    gpio_err := rpio.Open()
+    if gpio_err == nil{
+        gpio_pin = rpio.Pin(17)
+        gpio_pin.Input()
+    }
 
+    if gpio_err != nil{
+        fmt.Println(fmt.Sprintf("GPIO Error:%s\n",gpio_err.Error()))
+    }
+
+    MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
+    SubscribedDoorbells = getSubscribedDoorbells()
 
 
     router := httprouter.New()
@@ -337,9 +493,12 @@ func main() {
     router.Handle("GET","/testsend", TestSend)
     router.Handle("GET","/join", SubscribeNewDoorbell)
     router.Handle("GET","/syncnew", SyncNewDoorbell)
-
+    router.Handle("GET","/RingAllDoorbells",WebRingAllDoorbells)
 
     //router.PUT("/putchime", PutChime)
-
+    if gpio_err == nil{
+        go WaitForDoorbellButton()
+        fmt.Printf("Waiting for Doorbell Button")
+    }
     log.Fatal(http.ListenAndServe(":3434", router))
 }

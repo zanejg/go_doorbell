@@ -15,4 +15,5 @@
         </ul>
 
     </body>
+    <a href = "/RingAllDoorbells">Ring all doorbells</a>
 </html>
