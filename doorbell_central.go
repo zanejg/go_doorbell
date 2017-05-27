@@ -384,9 +384,9 @@ func RingADoorbell(filename string, url string){
     resp, err := client.Do(req)
     if err != nil {
             //log.Print(err)
-            fmt.Printf(fmt.Sprintf("@@@ ERROR:%s for doorbell:%s with response:%s",err,url,resp))
+            fmt.Printf("@@@ ERROR:%s for doorbell:%s with response:%s",err,url,resp)
     }else{
-        fmt.Printf(fmt.Sprintf("Rang doorbell:%s\n",url))
+        fmt.Printf("Rang doorbell:%s\n",url)
     }
 
 }
@@ -443,6 +443,10 @@ func WaitForDoorbellButton(){
         // when the the pin goes high then ring the bells
         doorbell_reply = RingAllDoorbells()
         fmt.Printf("Replies: %s",doorbell_reply)
+        //I couldn't find how else to get a duration for the sleep
+        wait_time , _ := time.ParseDuration(fmt.Sprintf("%dms",CONFIG.wait_after_press))
+        time.Sleep(wait_time)
+        //time.Sleep(100 * time.Millisecond)
     }
 
 }
@@ -455,6 +459,8 @@ var gpio_pin rpio.Pin
 type Config struct {
     Doorbell_dir string
     Satellite_port  int
+    wait_after_press int
+
 }
 var CONFIG Config
 var MP3path string
