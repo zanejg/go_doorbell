@@ -501,10 +501,11 @@ func main() {
     router.Handle("GET","/syncnew", SyncNewDoorbell)
     router.Handle("GET","/RingAllDoorbells",WebRingAllDoorbells)
 
+    log.Fatal(http.ListenAndServe(":3434", router))
     //router.PUT("/putchime", PutChime)
     if gpio_err == nil{
         go WaitForDoorbellButton()
         fmt.Printf("Waiting for Doorbell Button")
     }
-    log.Fatal(http.ListenAndServe(":3434", router))
+
 }
