@@ -312,7 +312,7 @@ func SyncNewDoorbell(w http.ResponseWriter, req *http.Request, ps httprouter.Par
     //fmt.Printf("the files:%s", lsdir)
 
     the_url := fmt.Sprintf("http://%s:%d/putchime",the_server,CONFIG.Satellite_port)
-    the_url = fmt.Sprintf("http://localhost:%s/putchime",CONFIG.Satellite_port)
+    //the_url = fmt.Sprintf("http://localhost:%s/putchime",CONFIG.Satellite_port)
     the_path := ""
     fmt.Printf("the_url:%s\n", the_url)
 
