@@ -169,6 +169,7 @@ func getSubscribedDoorbells() []string {
 ***************************************************************************/
 func WaitForDoorbellButton(){
     doorbell_reply := ""
+    wait_time , _ := time.ParseDuration(fmt.Sprintf("%dms",CONFIG.wait_after_press))
     // infinite loop for waiting for button presses
     for {
         // sit here waiting for the pin to go high
@@ -177,7 +178,7 @@ func WaitForDoorbellButton(){
         doorbell_reply = RingAllDoorbells()
         fmt.Printf("Replies: %s",doorbell_reply)
         //I couldn't find how else to get a duration for the sleep
-        wait_time , _ := time.ParseDuration(fmt.Sprintf("%dms",CONFIG.wait_after_press))
+
         time.Sleep(wait_time)
         //time.Sleep(100 * time.Millisecond)
     }
@@ -225,8 +226,9 @@ func main() {
 
 
     if gpio_err == nil{
-        go WaitForDoorbellButton()
         fmt.Printf("Waiting for Doorbell Button")
+        WaitForDoorbellButton()
+        
     }
 
 }
