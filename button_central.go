@@ -177,7 +177,7 @@ func WaitForDoorbellButton(){
         // sit here waiting for the pin to go high
         for pin == 0 {
           pin = gpio_pin.Read()
-          fmt.Printf("pin=|%d| \n",pin)
+          //fmt.Printf("pin=|%d| \n",pin)
         }
         // when the the pin goes high then ring the bells
         doorbell_reply = RingAllDoorbells()
