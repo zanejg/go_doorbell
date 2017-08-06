@@ -12,6 +12,7 @@ func main() {
         // look for whther there were any commandline args
     parms := os.Args[1:]
     //joinflag := false
+    cmd_format_msg := "The correct syntax is sync_chimes <serverIP(or hostname)>\n"
 
     if len(parms) > 0 {
         // then there were cmd line parms so we need to deal with them
@@ -36,30 +37,35 @@ func main() {
             }
             //fmt.Println(buf.String())
 
-            if buf.String() == "Join Success"{
-                fmt.Printf("Server reported success in subscribing this doorbell\n")
-                syncreq, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:3434/syncnew", parms[0]),nil)
-                //req.Header.Add("Accept", "application/json")
-                _, syncerr := client.Do(syncreq)
-                if syncerr != nil {
-                    //log.Print(err)
-                    fmt.Printf("@@@ ERROR:%s",syncerr)
-                    os.Exit(1)
-                }
+            switch buf.String(){
+                case "Join Success":
+                    fmt.Printf("Server reported success in subscribing this doorbell\n")
 
-
+                case "Doorbell already subscribed":
+                    fmt.Printf("Server reported this doorbell was already subscribed. \nAttempting sync\n")
 
                 //joinflag = true
-            } else {
-                fmt.Printf("Something went wrong when trying to join %s\n", parms[0])
+                default:
+                    fmt.Printf("Something went wrong when trying to join %s\n Message:%s\n", parms[0],buf.String())
+                    os.Exit(1)
+            }
+            // if we are here then a sync will be required
+            syncreq, _ := http.NewRequest("GET", fmt.Sprintf("http://%s:3434/sync", parms[0]),nil)
+            //req.Header.Add("Accept", "application/json")
+            _, syncerr := client.Do(syncreq)
+            if syncerr != nil {
+                //log.Print(err)
+                fmt.Printf("@@@ ERROR:%s",syncerr)
                 os.Exit(1)
             }
 
 
         } else {
-            fmt.Printf("The correct syntax is doorbell join serverIP(or hostname)\n")
+            fmt.Printf("%s\n",cmd_format_msg)
         }
 
 
+    }else {
+        fmt.Printf("%s\n",cmd_format_msg)
     }
 }
