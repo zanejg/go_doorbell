@@ -19,7 +19,6 @@ import (
     "mime/multipart"
     "encoding/json"
     "bufio"
-    "github.com/stianeikeland/go-rpio"
 )
 
 const (
@@ -431,30 +430,6 @@ func getSubscribedDoorbells() []string {
 }
 
 
-/**************************************************************************
-     MAIN BUTTON EVENT LOOP
-***************************************************************************/
-func WaitForDoorbellButton(){
-    doorbell_reply := ""
-    // infinite loop for waiting for button presses
-    for {
-        // sit here waiting for the pin to go high
-        for gpio_pin.Read() == 0 { }
-        // when the the pin goes high then ring the bells
-        doorbell_reply = RingAllDoorbells()
-        fmt.Printf("Replies: %s",doorbell_reply)
-        //I couldn't find how else to get a duration for the sleep
-        wait_time , _ := time.ParseDuration(fmt.Sprintf("%dms",CONFIG.wait_after_press))
-        time.Sleep(wait_time)
-        //time.Sleep(100 * time.Millisecond)
-    }
-
-}
-/**************************************************************************
-***************************************************************************/
-
-
-var gpio_pin rpio.Pin
 
 type Config struct {
     Doorbell_dir string
@@ -476,15 +451,6 @@ func main() {
     fmt.Println("DIR:",CONFIG.Doorbell_dir)
     fmt.Println("Port:",CONFIG.Satellite_port)
 
-    gpio_err := rpio.Open()
-    if gpio_err == nil{
-        gpio_pin = rpio.Pin(17)
-        gpio_pin.Input()
-    }
-
-    if gpio_err != nil{
-        fmt.Println(fmt.Sprintf("GPIO Error:%s\n",gpio_err.Error()))
-    }
 
     MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
     SubscribedDoorbells = getSubscribedDoorbells()
@@ -501,11 +467,7 @@ func main() {
     router.Handle("GET","/syncnew", SyncNewDoorbell)
     router.Handle("GET","/RingAllDoorbells",WebRingAllDoorbells)
 
-    go log.Fatal(http.ListenAndServe(":3434", router))
-    //router.PUT("/putchime", PutChime)
-    if gpio_err == nil{
-        go WaitForDoorbellButton()
-        fmt.Printf("Waiting for Doorbell Button")
-    }
+    log.Fatal(http.ListenAndServe(":3434", router))
+
 
 }
