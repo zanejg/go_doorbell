@@ -1,4 +1,5 @@
 {
-"Doorbell_dir":"/home/zane/programming/go/webserver",
-"Satellite_port":3400
+"Doorbell_dir":"/home/zane/programming/go/go_doorbell",
+"Satellite_port":3400,
+"wait_after_press":2000
 }
