@@ -52,7 +52,29 @@ type ListPageData struct {
 //*************************************************************************************
 
 
-func ListStoredChimes(dirpath string) []string {
+func ListStoredChimes(rawdirpath string) []string {
+    dirslice := strings.Split(rawdirpath, "!")
+    //var isrecursed bool
+    var dirpath string
+
+    switch lenslice:=len(dirslice);lenslice{
+    case 1:
+        //isrecursed = false
+        dirpath = rawdirpath
+    case 2:
+        //isrecursed = true
+        dirpath = dirslice[0] + "/" + dirslice[1]
+    case 3,4,5:
+        //isrecursed = true
+        dirpath = strings.Join(dirslice, "/")
+    default:
+        reterr := make([]string,2)
+        reterr[0] = "filepath error"
+        reterr[1] = "Problem splitting path info"
+        return reterr
+
+    }
+
     dir, err:= os.Open(dirpath)
     if err != nil{
         fmt.Printf("opening error:%v\n",err)
@@ -66,10 +88,24 @@ func ListStoredChimes(dirpath string) []string {
     ret:= make([]string,len(ls))
     i:=0
     for _, this_file := range ls {
-        //fmt.Printf("%s\n",this_file.Name())
         if strings.HasSuffix(this_file.Name(), ".mp3") {
             ret[i]=this_file.Name()
             i++
+        }
+        if this_file.IsDir() {
+            newrawpath := rawdirpath + "!"+ this_file.Name()
+            //@@@@ !!!! RECURSIVE CALL !!!! @@@@
+            subdirlist := ListStoredChimes(newrawpath)
+            //fmt.Printf("%s\n",this_file.Name())
+
+            sublist := make([]string,len(subdirlist))
+            //XXXXXXXXXXX need to prepend dir to each filename
+
+            for cc, this_sub_file := range subdirlist{
+                sublist[cc] = newrawpath + this_sub_file
+                //cc += 1
+            }
+            ret = append(ret, sublist...)
         }
 
     }
@@ -345,16 +381,46 @@ func WebRingAllDoorbells(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
     To tell all of the subscribed doorbells to ring after
     choosing which chime randomly from the dir
     */
-
+    fmt.Printf("About to ring all doorbells from web\n")
     reply := RingAllDoorbells()
 
-
-    pagedata := PageData{Token:"Big Secret Token",
-                        Reply:reply}
+    fmt.Printf("Rang all doorbells from web with reply:%s\n",reply)
 
 
-    t, _ := template.ParseFiles("index_central.gtpl")
-    t.Execute(w,pagedata)
+
+    // redirect back to the main page
+    http.Redirect(w,r,"/",302)
+
+    // pagedata := PageData{Token:"Big Secret Token",
+    //                     Reply:reply}
+    //
+    //
+    // t, _ := template.ParseFiles("index_central.gtpl")
+    // t.Execute(w,pagedata)
+}
+
+/***************************************************************
+  DEFINE the special sounds that we may want to Run
+  *********************************************************/
+
+
+func RingSpecial(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+
+    special_sounds := map[string]string{
+        "face_detected": "special!facedetected01.mp3",
+        "test": "data1.mp3",
+    }
+
+
+    fmt.Fprintf(w, "hello, %s!\n", ps.ByName("specific"))
+    specific_name := ps.ByName("specific")
+
+    sound_path := special_sounds[specific_name]
+    fmt.Fprintf(w, "soundpath=%s\n",sound_path)
+
+    for _,this_doorbell := range(SubscribedDoorbells){
+        go RingADoorbell(sound_path,this_doorbell)
+    }
 }
 
 
@@ -365,7 +431,9 @@ func WebRingAllDoorbells(w http.ResponseWriter, r *http.Request, _ httprouter.Pa
 
 
 func RingAllDoorbells () string {
-    // send the ring command to all doorbells in the subscribed doorbell list
+    /* choose a chime randomly then send the ring command to all doorbells
+    in the subscribed doorbell list
+    */
     reply:= ""
     lsdir:=ListStoredChimes(MP3path)
     //fmt.Printf("%s\n",lsdir)
@@ -385,6 +453,35 @@ func RingAllDoorbells () string {
     return reply
 }
 
+
+
+//*************************************************************************************
+//*************************************************************************************
+
+
+func PlayAllDoorbells (filepath string) string {
+    // play a specific sound on all doorbells in the subscribed doorbell list
+    reply:= ""
+    lsdir:=ListStoredChimes(MP3path)
+    //fmt.Printf("%s\n",lsdir)
+    if len(lsdir) < 1 {
+       reply = "No files to choose from"
+    }else{
+
+        reply = fmt.Sprintf("Playing: %s  on all doorbells", filepath)
+        fmt.Printf("%s\n",reply)
+
+
+        for _,this_doorbell := range(SubscribedDoorbells){
+            go RingADoorbell(filepath,this_doorbell)
+        }
+    }
+    return reply
+}
+
+
+//*************************************************************************************
+//*************************************************************************************
 
 
 func RingADoorbell(filename string, url string){
@@ -465,7 +562,7 @@ var SubscribedDoorbells []string
 func main() {
     CONFIG = GetConfig()
     fmt.Println("DIR:",CONFIG.Doorbell_dir)
-    fmt.Println("Port:",CONFIG.Satellite_port)
+    fmt.Println("Port:3434")
 
 
     MP3path = CONFIG.Doorbell_dir + "/" + MP3subpath
@@ -482,6 +579,7 @@ func main() {
     router.Handle("GET","/join", SubscribeNewDoorbell)
     router.Handle("GET","/sync", SyncDoorbell)
     router.Handle("GET","/RingAllDoorbells",WebRingAllDoorbells)
+    router.Handle("GET","/special/:specific", RingSpecial)
 
 
     log.Fatal(http.ListenAndServe(":3434", router))
