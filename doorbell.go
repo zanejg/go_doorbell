@@ -55,7 +55,11 @@ func Ls(dirpath string) []string {
 
 
 func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-    fmt.Fprint(w, "Welcome!\n")
+    pagedata := PageData{Token:"Big Secret Token",
+                                Serverstr:"192.168.178.20"}
+    t, _ := template.ParseFiles("doorbell_index.gtpl")
+    t.Execute(w, pagedata)
+    //fmt.Fprint(w, "Welcome!\n")
 }
 
 func Hello(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -63,9 +67,12 @@ func Hello(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 }
 
 func Ring(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-    fmt.Fprintf(w, "ringing\n")
+    //fmt.Fprintf(w, "ringing\n")
 
-    cmd := exec.Command("mpg123", fmt.Sprintf("%s%s", MP3path, "hailed.mp3"))
+    files := Ls(MP3subpath)
+
+    cmd := exec.Command("mpg123", fmt.Sprintf("%s%s", MP3path,files[0]))
+
 	//cmd.Stdin = strings.NewReader("some input")
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -73,6 +80,8 @@ func Ring(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
 	if err != nil {
 		log.Fatal(err)
 	}
+    // redirect back to the main page
+    http.Redirect(w,r,"/",301)
 }
 
 func contains(s []string, e string) bool {
@@ -85,23 +94,42 @@ func contains(s []string, e string) bool {
 }
 func RingChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
     //fmt.Fprintf(w, "ringing\n")
+    cmd := exec.Command("ls") // need to init this var at this scope
+
     if r.Method == "GET" {
 
         filename := ps.ByName("name")
-        filelist := Ls(MP3path)
 
-        if contains(filelist, filename){
-            cmd := exec.Command("mpg123", fmt.Sprintf("%s%s", MP3path, filename))
-        	//cmd.Stdin = strings.NewReader("some input")
-        	var out bytes.Buffer
-        	cmd.Stdout = &out
-        	err := cmd.Run()
-        	if err != nil {
-        		log.Fatal(err)
-        	}
+        if strings.Index(filename,"!") > -1 {
+            // then the file we want played is not in the list but is special
+            // we will let central handle the sub dirs but only play files under
+            // the main mp3 dir so assume the ! = / char is for under MP3path
+            pathfilename := strings.Replace(filename, "!","/",-1)
+            cmd = exec.Command("mpg123", fmt.Sprintf("%s%s", MP3path, pathfilename))
+
+        }else{
+            // standard door chime to be run and must be in the list
+            filelist := Ls(MP3path)
+            if contains(filelist, filename){
+                cmd = exec.Command("mpg123", fmt.Sprintf("%s%s", MP3path, filename))
+            	//cmd.Stdin = strings.NewReader("some input")
+            }else{
+                log.Fatal("Can't find chime")
+                return
+            }
+        }
+        var out bytes.Buffer
+        cmd.Stdout = &out
+        err := cmd.Run()
+        if err != nil {
+            log.Fatal(err)
         }
     }
+
 }
+
+
+
 
 
 
@@ -110,6 +138,16 @@ type PageData struct {
     Serverstr string
     Token string
 }
+
+func CreateDirIfNotExist(dir string) {
+      if _, err := os.Stat(dir); os.IsNotExist(err) {
+              err = os.MkdirAll(dir, 0755)
+              if err != nil {
+                      panic(err)
+              }
+      }
+}
+
 
 
 func PutChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -134,14 +172,34 @@ func PutChime(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
            }
            defer file.Close()
            fmt.Fprintf(w, "%v", handler.Header)
-           f, err := os.OpenFile(MP3path+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
-           if err != nil {
-               fmt.Println(fmt.Sprintf("Error opening file:%s",err))
-               return
+           filepath := r.FormValue("path")
+           if(filepath == ""){
+               f, err := os.OpenFile(MP3path+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+               if err != nil {
+                   fmt.Println(fmt.Sprintf("Error opening file:%s",err))
+                   return
+               }
+               io.Copy(f, file)
+               fmt.Printf("Got file:%s\n", handler.Filename)
+               defer f.Close()
+           }else{
+                // then a path has been given so we want to store the file
+                // in a subdirectory
+                thepath := MP3path + filepath
+                // if the path does not lready exist then just create it
+                CreateDirIfNotExist(thepath)
+
+                f, err := os.OpenFile(thepath+"/"+handler.Filename, os.O_WRONLY|os.O_CREATE, 0666)
+                if err != nil {
+                    fmt.Println(fmt.Sprintf("Error opening file:%s",err))
+                    return
+                }
+                io.Copy(f, file)
+                fmt.Printf("Got file:%s\n", handler.Filename)
+                defer f.Close()
+
            }
-           defer f.Close()
-           io.Copy(f, file)
-           fmt.Printf("Got file:%s\n", handler.Filename)
+
        }
 }
 
@@ -188,6 +246,7 @@ func main() {
     router.Handle("GET","/putchime", PutChime)
     router.Handle("POST","/putchime", PutChime)
     router.GET("/ringchime/:name", RingChime)
+    //router.GET("/playspecial/path=:path", playspecial)
     //router.PUT("/putchime", PutChime)
 
     log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d",CONFIG.Satellite_port), router))
