@@ -174,7 +174,11 @@ func WaitForDoorbellButton(){
     // infinite loop for waiting for button presses
     for {
         // sit here waiting for the pin to go high
-        for gpio_pin.Read() == 0 { }
+        for gpio_pin.Read() == 0 {
+            // CPU was maxxing out hopefully this will fix it
+            // checking 50 times a second should be ample
+            time.Sleep(20 * time.Millisecond)
+        }
         // when the the pin goes high then ring the bells
         doorbell_reply = RingAllDoorbells()
         fmt.Printf("Replies: %s",doorbell_reply)
