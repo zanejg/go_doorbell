@@ -36,4 +36,15 @@ _testmain.go
 #misc files
 config.json
 *.txt
+doorbell
+button_central
+doorbell_button
+
+doorbell_central
+doorbell_central
+sync_chimes
+web_central
+doorbell_manage
+
+
 
