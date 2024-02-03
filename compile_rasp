@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# Compile the Rasp code
+env GOARCH=arm64 GOOS=linux go build -o $1 $1.go
